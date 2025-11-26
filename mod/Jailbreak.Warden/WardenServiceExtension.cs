@@ -23,10 +23,11 @@ public static class WardenServiceExtension {
     serviceCollection.AddPluginBehavior<IWardenIcon, WardenIconBehavior>();
     serviceCollection.AddPluginBehavior<ISpecialIcon, SpecialIconBehavior>();
     serviceCollection.AddPluginBehavior<CountCommandsBehavior>();
-
+    serviceCollection.AddPluginBehavior<AutoWarden>();
 
     serviceCollection.AddPluginBehavior<SpecialTreatmentCommandsBehavior>();
     serviceCollection.AddPluginBehavior<PeaceCommandsBehavior>();
+    serviceCollection.AddPluginBehavior<CountdownCommandBehavior>();
     serviceCollection.AddPluginBehavior<WardenCommandsBehavior>();
     serviceCollection.AddPluginBehavior<RollCommandBehavior>();
     serviceCollection.AddPluginBehavior<ChickenCommandBehavior>();

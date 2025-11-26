@@ -68,12 +68,15 @@ public class RebelListener(IRebelService rebelService,
         if (!rebelService.IsRebel(player)) return HookResult.Continue;
         if (!LastRequestManager.shouldGrantCredits()) return HookResult.Continue;
 
-        var attacker = ev.Attacker;
-        if (attacker == null || !attacker.IsValid || attacker.IsBot)
-            return HookResult.Continue;
+    var attacker = ev.Attacker;
+    if (attacker == null || !attacker.IsValid || attacker.IsBot)
+      return HookResult.Continue;
+    
+    // Do not give player credits if they suicided
+    if (player.SteamID == attacker.SteamID)  return HookResult.Continue;
 
-        var eco = API.Gangs?.Services.GetService<IEcoManager>();
-        if (eco == null) return HookResult.Continue;
+    var eco = API.Gangs?.Services.GetService<IEcoManager>();
+    if (eco == null) return HookResult.Continue;
 
         var wrapper = new PlayerWrapper(attacker);
         if (!weaponScores.TryGetValue(player.Slot, out var weaponScore))

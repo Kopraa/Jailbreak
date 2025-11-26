@@ -66,33 +66,32 @@ public class LastRequestManager(ILRLocale messages, IServiceProvider provider)
     private ILastRequestFactory? factory;
     public bool IsLREnabledForRound { get; set; } = true;
 
-    public bool ShouldBlockDamage(CCSPlayerController player,
-      CCSPlayerController? attacker)
-    {
-        if (!IsLREnabled) return false;
+  public bool ShouldBlockDamage(CCSPlayerController victim,
+    CCSPlayerController? attacker) {
+    if (!IsLREnabled) return false;
 
         if (attacker == null || !attacker.IsReal()) return false;
 
-        var playerLR = ((ILastRequestManager)this).GetActiveLR(player);
-        var attackerLR = ((ILastRequestManager)this).GetActiveLR(attacker);
+    var victimLR   = ((ILastRequestManager)this).GetActiveLR(victim);
+    var attackerLR = ((ILastRequestManager)this).GetActiveLR(attacker);
 
-        if (playerLR == null && attackerLR == null)
-            // Neither of them is in an LR
-            return false;
+    if (victimLR == null && attackerLR == null)
+      // Neither of them is in an LR
+      return false;
 
-        if (playerLR == null != (attackerLR == null))
-        {
-            // One of them is in an LR
-            messages.DamageBlockedInsideLastRequest.ToCenter(attacker);
-            return true;
-        }
+    if (victimLR == null != (attackerLR == null)) {
+      // One of them is in an LR
+      messages.DamageBlockedInsideLastRequest.ToCenter(attacker);
+      return true;
+    }
 
-        // Both of them are in LR, verify they're in same LR
-        if (playerLR == null) return false;
+    // Both of them are in LR, verify they're in same LR
+    if (victimLR == null) return false;
 
-        if (playerLR.Prisoner.Equals(attacker) || playerLR.Guard.Equals(attacker))
-            // Same LR, allow damage
-            return false;
+    if (victimLR.Prisoner.Slot == attacker.Slot
+        || victimLR.Guard.Slot == attacker.Slot)
+      // The person attacking is the victim's LR participant, allow damage
+      return false;
 
         messages.DamageBlockedNotInSameLR.ToCenter(attacker);
         return true;
@@ -112,21 +111,21 @@ public class LastRequestManager(ILRLocale messages, IServiceProvider provider)
         var stats = API.Gangs.Services.GetService<IStatManager>();
         stats?.Stats.Add(new LRStat());
 
-        basePlugin.RegisterListener<Listeners.OnEntityParentChanged>(OnDrop);
-        VirtualFunctions.CBaseEntity_TakeDamageOldFunc.Hook(OnTakeDamage,
-          HookMode.Pre);
-        VirtualFunctions.CCSPlayer_ItemServices_CanAcquireFunc.Hook(OnCanAcquire,
-          HookMode.Pre);
-    }
+    basePlugin.RegisterListener<Listeners.OnEntityParentChanged>(OnDrop);
+    // VirtualFunctions.CBaseEntity_TakeDamageOldFunc.Hook(OnTakeDamage,
+    //   HookMode.Pre);
+    VirtualFunctions.CCSPlayer_ItemServices_CanAcquireFunc.Hook(OnCanAcquire,
+      HookMode.Pre);
+  }
 
     public void Dispose()
     {
         VirtualFunctions.CCSPlayer_ItemServices_CanAcquireFunc.Unhook(OnCanAcquire,
           HookMode.Pre);
 
-        VirtualFunctions.CBaseEntity_TakeDamageOldFunc.Unhook(OnTakeDamage,
-          HookMode.Pre);
-    }
+    // VirtualFunctions.CBaseEntity_TakeDamageOldFunc.Unhook(OnTakeDamage,
+    //   HookMode.Pre);
+  }
 
     public void DisableLR() { IsLREnabled = false; }
 
@@ -471,16 +470,15 @@ public class LastRequestManager(ILRLocale messages, IServiceProvider provider)
         return Utilities.GetPlayers().Count >= CV_MIN_PLAYERS_FOR_CREDITS.Value;
     }
 
-    private HookResult OnTakeDamage(DynamicHook hook)
-    {
-        var info = hook.GetParam<CTakeDamageInfo>(1);
-        var playerPawn = hook.GetParam<CCSPlayerPawn>(0);
+  private HookResult OnTakeDamage(DynamicHook hook) {
+    var playerPawn = hook.GetParam<CCSPlayerPawn>(0);
+    var info       = hook.GetParam<CTakeDamageInfo>(1);
 
         var player = playerPawn.Controller.Value?.As<CCSPlayerController>();
         if (player == null || !player.IsValid) return HookResult.Continue;
 
-        var attackerPawn = info.Attacker;
-        var attacker = attackerPawn.Value?.As<CCSPlayerController>();
+    var attackerPawn = info.Attacker.Value?.As<CCSPlayerPawn>();
+    var attacker     = attackerPawn?.As<CCSPlayerController>();
 
         if (attacker == null || !attacker.IsValid) return HookResult.Continue;
 
@@ -489,19 +487,17 @@ public class LastRequestManager(ILRLocale messages, IServiceProvider provider)
           HookResult.Continue;
     }
 
-    [UsedImplicitly]
-    [GameEventHandler]
-    public HookResult OnTakeDamage(EventPlayerHurt ev, GameEventInfo info)
-    {
-        var player = ev.Userid;
-        var attacker = ev.Attacker;
-        if (player == null || !player.IsReal()) return HookResult.Continue;
-        if (!ShouldBlockDamage(player, attacker)) return HookResult.Continue;
-        if (player.PlayerPawn.IsValid)
-        {
-            var playerPawn = player.PlayerPawn.Value!;
-            playerPawn.Health += ev.DmgHealth;
-        }
+  [UsedImplicitly]
+  [GameEventHandler]
+  public HookResult OnTakeDamage(EventPlayerHurt ev, GameEventInfo info) {
+    var player   = ev.Userid;
+    var attacker = ev.Attacker;
+    if (player == null || !player.IsReal()) return HookResult.Continue;
+    if (!ShouldBlockDamage(player, attacker)) return HookResult.Continue;
+    if (player.PlayerPawn.IsValid) {
+      var playerPawn = player.PlayerPawn.Value!;
+      playerPawn.Health += ev.DmgHealth;
+    }
 
         info.DontBroadcast = false;
         ev.DmgArmor = ev.DmgHealth = 0;
@@ -514,18 +510,22 @@ public class LastRequestManager(ILRLocale messages, IServiceProvider provider)
         foreach (var lr in ActiveLRs.ToList())
             EndLastRequest(lr, LRResult.TIMED_OUT);
 
-        return HookResult.Continue;
-    }
+    IsLREnabled = false;
+    return HookResult.Continue;
+  }
 
-    [GameEventHandler]
-    public HookResult OnRoundStart(EventRoundStart @event, GameEventInfo info)
-    {
-        IsLREnabledForRound = true;
-        IsLREnabled = false;
-        foreach (var player in Utilities.GetPlayers())
-            MenuManager.CloseActiveMenu(player);
-        return HookResult.Continue;
-    }
+  [GameEventHandler]
+  public HookResult OnRoundStart(EventRoundStart @event, GameEventInfo info) {
+    IsLREnabledForRound = true;
+    IsLREnabled         = false;
+    foreach (var player in Utilities.GetPlayers())
+      MenuManager.CloseActiveMenu(player);
+
+    foreach (var lr in ActiveLRs.ToList())
+      EndLastRequest(lr, LRResult.TIMED_OUT);
+    ActiveLRs.Clear();
+    return HookResult.Continue;
+  }
 
     [GameEventHandler]
     public HookResult OnPlayerDeath(EventPlayerDeath @event, GameEventInfo info)
