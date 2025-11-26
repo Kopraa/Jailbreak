@@ -2,5 +2,5 @@ namespace Jailbreak.LastRequest;
 
 [Obsolete("No longer used, use FakeConvars.")]
 public class LastRequestConfig {
-  public int PrisonersToActiveLR { get; set; } = 2;
+  public int PrisonersToActiveLR { get; set; } = 1;
 }

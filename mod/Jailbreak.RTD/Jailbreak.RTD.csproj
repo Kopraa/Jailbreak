@@ -7,10 +7,16 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\..\lang\Jailbreak.English\Jailbreak.English.csproj"/>
-        <ProjectReference Include="..\..\public\Jailbreak.Formatting\Jailbreak.Formatting.csproj"/>
-        <ProjectReference Include="..\..\public\Jailbreak.Public\Jailbreak.Public.csproj"/>
-        <ProjectReference Include="..\..\public\Jailbreak.Validator\Jailbreak.Validator.csproj"/>
+      <PackageReference Include="CounterStrikeSharp.API" Version="1.0.347" />
+      <PackageReference Include="CS2ScreenMenuAPI" Version="1.6.0" />
+      <PackageReference Include="CS2TraceRay" Version="1.0.8" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\lang\Jailbreak.English\Jailbreak.English.csproj" />
+        <ProjectReference Include="..\..\public\Jailbreak.Formatting\Jailbreak.Formatting.csproj" />
+        <ProjectReference Include="..\..\public\Jailbreak.Public\Jailbreak.Public.csproj" />
+        <ProjectReference Include="..\..\public\Jailbreak.Validator\Jailbreak.Validator.csproj" />
     </ItemGroup>
 
     <ItemGroup>

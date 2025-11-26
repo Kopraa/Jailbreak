@@ -7,12 +7,15 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\..\public\Jailbreak.Public\Jailbreak.Public.csproj"/>
-        <ProjectReference Include="..\Jailbreak.Debug\Jailbreak.Debug.csproj"/>
+        <ProjectReference Include="..\..\public\Jailbreak.Public\Jailbreak.Public.csproj" />
+        <ProjectReference Include="..\Jailbreak.Debug\Jailbreak.Debug.csproj" />
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="MySqlConnector" Version="2.3.7"/>
+        <PackageReference Include="CounterStrikeSharp.API" Version="1.0.347" />
+        <PackageReference Include="CS2ScreenMenuAPI" Version="1.6.0" />
+        <PackageReference Include="CS2TraceRay" Version="1.0.8" />
+        <PackageReference Include="MySqlConnector" Version="2.3.7" />
     </ItemGroup>
 
 </Project>

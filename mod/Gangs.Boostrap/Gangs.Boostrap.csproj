@@ -7,13 +7,19 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\Gangs.BombIconPerk\Gangs.BombIconPerk.csproj"/>
-        <ProjectReference Include="..\Gangs.CellsPerk\Gangs.CellsPerk.csproj"/>
-        <ProjectReference Include="..\Gangs.LastRequestColorPerk\Gangs.LastRequestColorPerk.csproj"/>
-        <ProjectReference Include="..\Gangs.SpecialDayColorPerk\Gangs.SpecialDayColorPerk.csproj"/>
-        <ProjectReference Include="..\Gangs.SpecialIconPerk\Gangs.SpecialIconPerk.csproj"/>
-        <ProjectReference Include="..\Gangs.WardenIconPerk\Gangs.WardenIconPerk.csproj"/>
-        <ProjectReference Include="..\Gangs.WardenPaintColorPerk\Gangs.WardenPaintColorPerk.csproj"/>
+      <PackageReference Include="CounterStrikeSharp.API" Version="1.0.347" />
+      <PackageReference Include="CS2ScreenMenuAPI" Version="1.6.0" />
+      <PackageReference Include="CS2TraceRay" Version="1.0.8" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Gangs.BombIconPerk\Gangs.BombIconPerk.csproj" />
+        <ProjectReference Include="..\Gangs.CellsPerk\Gangs.CellsPerk.csproj" />
+        <ProjectReference Include="..\Gangs.LastRequestColorPerk\Gangs.LastRequestColorPerk.csproj" />
+        <ProjectReference Include="..\Gangs.SpecialDayColorPerk\Gangs.SpecialDayColorPerk.csproj" />
+        <ProjectReference Include="..\Gangs.SpecialIconPerk\Gangs.SpecialIconPerk.csproj" />
+        <ProjectReference Include="..\Gangs.WardenIconPerk\Gangs.WardenIconPerk.csproj" />
+        <ProjectReference Include="..\Gangs.WardenPaintColorPerk\Gangs.WardenPaintColorPerk.csproj" />
     </ItemGroup>
 
     <ItemGroup>

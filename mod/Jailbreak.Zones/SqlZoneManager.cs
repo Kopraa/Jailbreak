@@ -12,7 +12,7 @@ public class SqlZoneManager(IZoneFactory factory) : IZoneManager {
     new("css_jb_zonetable", "The table name for the zones", "cs2_jb_zones");
 
   public static readonly FakeConVar<string> CV_SQL_CONNECTION_STRING =
-    new("css_jb_sqlconnection", "The connection string for the database", "",
+    new("css_jb_sqlconnection", "The connection string for the database", "Server=127.0.0.1;User ID=root;Password=Winston1312plavi1312kratki@;Database=cs2_jailbreak;SSL Mode=none;pooling = true;convert zero datetime=True",
       ConVarFlags.FCVAR_PROTECTED);
 
   private readonly Dictionary<ZoneType, IList<IZone>> zones = new();

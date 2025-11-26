@@ -15,13 +15,13 @@ public static class LRTypeExtensions {
   public static string ToFriendlyString(this LRType type) {
     return type switch {
       LRType.GUN_TOSS            => "Gun Toss",
-      LRType.ROCK_PAPER_SCISSORS => "Rock Paper Scissors",
+      //LRType.ROCK_PAPER_SCISSORS => "Rock Paper Scissors",
       LRType.KNIFE_FIGHT         => "Knife Fight",
       LRType.NO_SCOPE            => "No Scope",
-      LRType.COINFLIP            => "Coinflip",
+      //LRType.COINFLIP            => "Coinflip",
       LRType.SHOT_FOR_SHOT       => "Shot For Shot",
       LRType.MAG_FOR_MAG         => "Mag For Mag",
-      LRType.RACE                => "Race",
+      //LRType.RACE                => "Race",
       _                          => "Unknown"
     };
   }

@@ -7,14 +7,20 @@
     </PropertyGroup>
 
     <ItemGroup>
+      <PackageReference Include="CounterStrikeSharp.API" Version="1.0.347" />
+      <PackageReference Include="CS2ScreenMenuAPI" Version="1.6.0" />
+      <PackageReference Include="CS2TraceRay" Version="1.0.8" />
+    </ItemGroup>
+
+    <ItemGroup>
         <Reference Include="GangsAPI">
             <HintPath>..\..\public\Jailbreak.Public\Mixin\GangsAPI.dll</HintPath>
         </Reference>
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\Gangs.BaseImpl\Gangs.BaseImpl.csproj"/>
-        <ProjectReference Include="..\Gangs.BombIconPerk\Gangs.BombIconPerk.csproj"/>
+        <ProjectReference Include="..\Gangs.BaseImpl\Gangs.BaseImpl.csproj" />
+        <ProjectReference Include="..\Gangs.BombIconPerk\Gangs.BombIconPerk.csproj" />
     </ItemGroup>
 
 </Project>

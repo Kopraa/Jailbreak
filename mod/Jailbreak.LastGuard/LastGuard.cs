@@ -35,7 +35,7 @@ public class LastGuard(ILGLocale notifications, ILastRequestManager lrManager,
 
   public static readonly FakeConVar<int> CV_LG_BASE_ROUND_TIME =
     new("css_jb_lg_time_base",
-      "Round time to set when LG is activated, 0 to disable", 30);
+      "Round time to set when LG is activated, 0 to disable", 0);
 
   public static readonly FakeConVar<int> CV_LG_KILL_BONUS_TIME =
     new("css_jb_lg_time_per_kill",

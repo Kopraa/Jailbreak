@@ -25,9 +25,9 @@ public class Jailbreak : BasePlugin {
   /// <inheritdoc />
   public override string ModuleName => "Jailbreak";
 
-  /// <inheritdoc />
-  public override string ModuleVersion
-    => $"{GitVersionInformation.SemVer} ({GitVersionInformation.ShortSha})";
+    /// <inheritdoc />
+    public override string ModuleVersion
+      => "1";
 
   /// <inheritdoc />
   public override string ModuleAuthor => "EdgeGamers Development";

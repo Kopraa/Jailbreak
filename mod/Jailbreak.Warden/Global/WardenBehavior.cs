@@ -34,627 +34,697 @@ namespace Jailbreak.Warden.Global;
 
 // By making it a struct we ensure values from the CCSPlayerPawn are passed by VALUE.
 public struct PreWardenStats(int armorValue, int health, int maxHealth,
-  bool headHealthShot, bool hadHelmetArmor) {
-  public readonly int ArmorValue = armorValue;
-  public readonly int Health = health;
-  public readonly int MaxHealth = maxHealth;
-  public readonly bool HeadHealthShot = headHealthShot;
-  public readonly bool HadHelmetArmor = hadHelmetArmor;
+  bool headHealthShot, bool hadHelmetArmor)
+{
+    public readonly int ArmorValue = armorValue;
+    public readonly int Health = health;
+    public readonly int MaxHealth = maxHealth;
+    public readonly bool HeadHealthShot = headHealthShot;
+    public readonly bool HadHelmetArmor = hadHelmetArmor;
 }
 
 public class WardenBehavior(ILogger<WardenBehavior> logger,
   IWardenLocale locale, IRichLogService logs,
   ISpecialTreatmentService specialTreatment, IRebelService rebels,
   IMuteService mute, ISpecialDayManager specialDays, IServiceProvider provider)
-  : IPluginBehavior, IWardenService {
-  public static readonly FakeConVar<int> CV_ARMOR_EQUAL = new("css_jb_hp_equal",
-    "Health points for when CTs have equal ratio", 50, ConVarFlags.FCVAR_NONE,
-    new RangeValidator<int>(1, 200));
-
-  public static readonly FakeConVar<int> CV_ARMOR_OUTNUMBER =
-    new("css_jb_hp_outnumber", "HP for CTs when outnumbering Ts", 25,
-      ConVarFlags.FCVAR_NONE, new RangeValidator<int>(1, 200));
-
-  public static readonly FakeConVar<int> CV_ARMOR_OUTNUMBERED =
-    new("css_jb_hp_outnumbered", "Health points for CTs when outnumbered by Ts",
-      100, ConVarFlags.FCVAR_NONE, new RangeValidator<int>(1, 200));
-
-  public static readonly FakeConVar<int> CV_WARDEN_ARMOR =
-    new("css_jb_warden_armor", "Armor for the warden", 125,
-      ConVarFlags.FCVAR_NONE, new RangeValidator<int>(1, 200));
-
-  public static readonly FakeConVar<int> CV_WARDEN_AUTO_OPEN_CELLS =
-    new("css_jb_warden_opencells_delay",
-      "Delay in seconds to auto-open cells at, -1 to disable", 60);
-
-  public static readonly FakeConVar<bool> CV_WARDEN_AUTO_SNITCH =
-    new("css_jb_warden_auto_snitch",
-      "True to broadcast how many prisoners were in cells when they auto-open",
-      false);
-
-  public static readonly FakeConVar<int> CV_WARDEN_HEALTH =
-    new("css_jb_warden_hp", "HP for the warden", 125, ConVarFlags.FCVAR_NONE,
+  : IPluginBehavior, IWardenService
+{
+    public static readonly FakeConVar<int> CV_ARMOR_EQUAL = new("css_jb_hp_equal",
+      "Health points for when CTs have equal ratio", 50, ConVarFlags.FCVAR_NONE,
       new RangeValidator<int>(1, 200));
 
-  public static readonly FakeConVar<int> CV_WARDEN_MAX_HEALTH =
-    new("css_jb_warden_maxhp", "Max HP for the warden", 100,
-      ConVarFlags.FCVAR_NONE, new RangeValidator<int>(1, 200));
+    public static readonly FakeConVar<int> CV_ARMOR_OUTNUMBER =
+      new("css_jb_hp_outnumber", "HP for CTs when outnumbering Ts", 25,
+        ConVarFlags.FCVAR_NONE, new RangeValidator<int>(1, 200));
 
-  public static readonly FakeConVar<string> CV_WARDEN_SOUND_KILLED =
-    new("css_jb_warden_sound_killed", "Sound to play when the warden is killed",
-      "wardenKilled");
+    public static readonly FakeConVar<int> CV_ARMOR_OUTNUMBERED =
+      new("css_jb_hp_outnumbered", "Health points for CTs when outnumbered by Ts",
+        100, ConVarFlags.FCVAR_NONE, new RangeValidator<int>(1, 200));
 
-  public static readonly FakeConVar<string> CV_WARDEN_SOUND_PASSED =
-    new("css_jb_warden_sound_killed", "Sound to play when the warden passes",
-      "wardenPassed");
+    public static readonly FakeConVar<int> CV_WARDEN_ARMOR =
+      new("css_jb_warden_armor", "Armor for the warden", 125,
+        ConVarFlags.FCVAR_NONE, new RangeValidator<int>(1, 200));
 
-  public static readonly FakeConVar<string> CV_WARDEN_SOUND_NEW =
-    new("css_jb_warden_sound_killed",
-      "Sound to play when the warden is assigned", "wardenNew");
+    public static readonly FakeConVar<int> CV_WARDEN_AUTO_OPEN_CELLS =
+      new("css_jb_warden_opencells_delay",
+        "Delay in seconds to auto-open cells at, -1 to disable", 60);
 
-  public static readonly FakeConVar<int> CV_WARDEN_TERRORIST_RATIO =
-    new("css_jb_warden_t_ratio", "Ratio of T:CT to use for HP adjustments", 3);
+    public static readonly FakeConVar<bool> CV_WARDEN_AUTO_SNITCH =
+      new("css_jb_warden_auto_snitch",
+        "True to broadcast how many prisoners were in cells when they auto-open",
+        false);
 
-  private readonly ISet<CCSPlayerController> bluePrisoners =
-    new HashSet<CCSPlayerController>();
+    public static readonly FakeConVar<int> CV_WARDEN_HEALTH =
+      new("css_jb_warden_hp", "HP for the warden", 125, ConVarFlags.FCVAR_NONE,
+        new RangeValidator<int>(1, 200));
 
-  private readonly IWardenIcon? iconer = provider.GetService<IWardenIcon>();
+    public static readonly FakeConVar<int> CV_WARDEN_MAX_HEALTH =
+      new("css_jb_warden_maxhp", "Max HP for the warden", 100,
+        ConVarFlags.FCVAR_NONE, new RangeValidator<int>(1, 200));
 
-  private bool firstWarden;
-  private string? oldTag;
-  private char? oldTagColor;
+    public static readonly FakeConVar<string> CV_WARDEN_SOUND_KILLED =
+      new("css_jb_warden_sound_killed", "Sound to play when the warden is killed",
+        "wardenKilled");
 
-  private BasePlugin parent = null!;
-  private PreWardenStats? preWardenStats;
-  private Timer? unblueTimer, openCellsTimer, passFreedayTimer;
+    public static readonly FakeConVar<string> CV_WARDEN_SOUND_PASSED =
+      new("css_jb_warden_sound_killed", "Sound to play when the warden passes",
+        "wardenPassed");
 
-  public void Start(BasePlugin basePlugin) {
-    parent = basePlugin;
-    if (API.Gangs != null) {
-      var stats = API.Gangs.Services.GetService<IStatManager>();
-      if (stats == null) return;
-      stats.Stats.Add(new WardenStat());
-    }
-  }
+    public static readonly FakeConVar<string> CV_WARDEN_SOUND_NEW =
+      new("css_jb_warden_sound_killed",
+        "Sound to play when the warden is assigned", "wardenNew");
 
-  /// <summary>
-  ///   Get the current warden, if there is one.
-  /// </summary>
-  public CCSPlayerController? Warden { get; private set; }
+    public static readonly FakeConVar<int> CV_WARDEN_TERRORIST_RATIO =
+      new("css_jb_warden_t_ratio", "Ratio of T:CT to use for HP adjustments", 3);
 
-  /// <summary>
-  ///   Whether or not a warden is currently assigned
-  /// </summary>
-  public bool HasWarden { get; private set; }
+    private readonly ISet<CCSPlayerController> bluePrisoners =
+      new HashSet<CCSPlayerController>();
 
-  public bool TrySetWarden(CCSPlayerController controller) {
-    if (HasWarden) return false;
+    private readonly IWardenIcon? iconer = provider.GetService<IWardenIcon>();
 
-    //	Verify player is a CT
-    if (controller.Team != CsTeam.CounterTerrorist) return false;
-    if (!controller.PawnIsAlive) return false;
+    private bool firstWarden;
+    private string? oldTag;
+    private char? oldTagColor;
 
-    mute.UnPeaceMute();
+    private BasePlugin parent = null!;
+    private PreWardenStats? preWardenStats;
+    private Timer? unblueTimer, openCellsTimer, passFreedayTimer;
 
-    HasWarden = true;
-    Warden    = controller;
-    Warden.SetColor(Color.Blue);
-
-    locale.NewWarden(Warden).ToAllChat().ToAllCenter();
-
-    Warden.Clan = "[WARDEN]";
-    Utilities.SetStateChanged(Warden, "CCSPlayerController", "m_szClan");
-    var ev = new EventNextlevelChanged(true);
-    ev.FireEvent(false);
-
-    API.Stats?.PushStat(new ServerStat("JB_WARDEN_ASSIGNED",
-      Warden.SteamID.ToString()));
-
-    if (API.Actain != null) {
-      var steam = Warden.SteamID;
-      // Server.NextFrameAsync(async () => {
-      Task.Run(async () => {
-        oldTag      = await API.Actain.getTagService().GetTag(steam);
-        oldTagColor = await API.Actain.getTagService().GetTagColor(steam);
-        await Server.NextFrameAsync(() => {
-          if (!Warden.IsValid) return;
-          API.Actain.getTagService().SetTag(Warden, "[WARDEN]", false);
-          API.Actain.getTagService()
-           .SetTagColor(Warden, ChatColors.DarkBlue, false);
-        });
-      });
-    }
-
-    if (API.Gangs != null) {
-      var wrapper = new PlayerWrapper(Warden);
-      var stats   = API.Gangs.Services.GetService<IPlayerStatManager>();
-      if (stats != null)
-        Task.Run(async () => {
-          var stat =
-            await stats.GetForPlayer<WardenData>(wrapper, WardenStat.STAT_ID)
-            ?? new WardenData();
-
-          stat.TimesWardened++;
-          await stats.SetForPlayer(wrapper, WardenStat.STAT_ID, stat);
-        });
-    }
-
-    iconer?.AssignWardenIcon(Warden);
-
-    foreach (var player in Utilities.GetPlayers())
-      player.ExecuteClientCommand($"play sounds/{CV_WARDEN_SOUND_NEW.Value}");
-
-    logs.Append(logs.Player(Warden), "is now the warden.");
-
-    unblueTimer = parent.AddTimer(3, unmarkPrisonersBlue);
-    passFreedayTimer
-    ?.Kill(); // If a warden is assigned, cancel the 10s freeday timer on pass
-    mute.PeaceMute(firstWarden ?
-      MuteReason.INITIAL_WARDEN :
-      MuteReason.WARDEN_TAKEN);
-
-    // Always store the stats of the warden b4 they became warden, in case we need to restore them later.
-    var wardenPawn = Warden.PlayerPawn.Value;
-    if (wardenPawn == null) return false;
-
-    if (firstWarden) {
-      firstWarden = false;
-
-      var hasHealthshot = playerHasHealthshot(Warden);
-      var hasHelmet     = playerHasHelmetArmor(Warden);
-      preWardenStats = new PreWardenStats(wardenPawn.ArmorValue,
-        wardenPawn.Health, wardenPawn.MaxHealth, hasHealthshot, hasHelmet);
-
-      if (!hasHelmet) Warden.GiveNamedItem("item_assaultsuit");
-
-      var ctArmorValue = getBalance() switch {
-        0  => CV_ARMOR_EQUAL.Value,       // Balanced teams
-        1  => CV_ARMOR_OUTNUMBERED.Value, // Ts outnumber CTs
-        -1 => CV_ARMOR_OUTNUMBER.Value,   // CTs outnumber Ts
-        _  => CV_ARMOR_EQUAL.Value        // default (should never happen)
-      };
-
-      /* Round start CT buff */
-      foreach (var guardController in Utilities.GetPlayers()
-       .Where(p => p is { Team: CsTeam.CounterTerrorist, PawnIsAlive: true })) {
-        var guardPawn = guardController.PlayerPawn.Value;
-        if (guardPawn == null) continue;
-
-        guardPawn.ArmorValue = ctArmorValue < guardPawn.ArmorValue ?
-          guardPawn.ArmorValue :
-          ctArmorValue;
-        Utilities.SetStateChanged(guardPawn, "CCSPlayerPawn", "m_ArmorValue");
-      }
-
-      setWardenStats(wardenPawn, CV_WARDEN_ARMOR.Value, CV_WARDEN_HEALTH.Value,
-        CV_WARDEN_MAX_HEALTH.Value);
-      if (!hasHealthshot) Warden.GiveNamedItem("weapon_healthshot");
-    } else { preWardenStats = null; }
-
-    return true;
-  }
-
-  public bool TryRemoveWarden(bool isPass = false) {
-    if (!HasWarden) return false;
-
-    mute.UnPeaceMute();
-
-    HasWarden = false;
-
-    if (isPass) { // If passing, start the timer to announce freeday
-      passFreedayTimer =
-        parent.AddTimer(10, () => { locale.NowFreeday.ToAllChat(); });
-    }
-
-    if (Warden != null && Warden.Pawn.Value != null) {
-      Warden.Clan = "";
-      Warden.SetColor(Color.White);
-      Utilities.SetStateChanged(Warden, "CCSPlayerController", "m_szClan");
-      var ev = new EventNextlevelChanged(true);
-      ev.FireEvent(false);
-
-      if (oldTag != null)
-        API.Actain?.getTagService().SetTag(Warden, oldTag, false);
-      if (oldTagColor != null)
-        API.Actain?.getTagService()
-         .SetTagColor(Warden, oldTagColor.Value, false);
-
-      logs.Append(logs.Player(Warden), "is no longer the warden.");
-
-      if (!isPass) {
-        var stats = API.Gangs?.Services.GetService<IPlayerStatManager>();
-        if (stats != null) {
-          var wrapper = new PlayerWrapper(Warden);
-          Task.Run(async () => await updateWardenDeathStats(wrapper));
+    public void Start(BasePlugin basePlugin)
+    {
+        parent = basePlugin;
+        if (API.Gangs != null)
+        {
+            var stats = API.Gangs.Services.GetService<IStatManager>();
+            if (stats == null) return;
+            stats.Stats.Add(new WardenStat());
         }
-      }
-
-      iconer?.RemoveWardenIcon(Warden);
     }
 
-    var wardenPawn = Warden!.PlayerPawn.Value;
-    if (wardenPawn == null) return false;
+    /// <summary>
+    ///   Get the current warden, if there is one.
+    /// </summary>
+    public CCSPlayerController? Warden { get; private set; }
 
-    // if isPass we restore their old health values or their current health, whichever is less.
-    if (isPass && preWardenStats != null) {
-      // Regardless of if the above if statement is true or false, we want to restore the player's previous stats.
-      setWardenStats(wardenPawn,
-        Math.Min(wardenPawn.ArmorValue, preWardenStats.Value.ArmorValue),
-        Math.Min(wardenPawn.Health, preWardenStats.Value.Health),
-        Math.Min(wardenPawn.MaxHealth, preWardenStats.Value.MaxHealth));
+    /// <summary>
+    ///   Whether or not a warden is currently assigned
+    /// </summary>
+    public bool HasWarden { get; private set; }
 
-      /* This code makes sure people can't abuse the first warden's buff by removing it if they pass. */
-      var itemServices = itemServicesOrNull(Warden);
-      if (itemServices == null) return false;
+    public bool TrySetWarden(CCSPlayerController controller)
+    {
+        if (HasWarden) return false;
 
-      if (!preWardenStats.Value.HadHelmetArmor) itemServices.HasHelmet = false;
+        //	Verify player is a CT
+        if (controller.Team != CsTeam.CounterTerrorist) return false;
+        if (!controller.PawnIsAlive) return false;
 
-      Utilities.SetStateChanged(wardenPawn, "CBasePlayerPawn",
-        "m_pItemServices");
+        mute.UnPeaceMute();
 
-      if (!preWardenStats.Value.HeadHealthShot)
-        playerHasHealthshot(Warden, true);
-    }
+        HasWarden = true;
+        Warden = controller;
+        Warden.SetColor(Color.Blue);
 
-    Warden = null;
-    return true;
-  }
+        locale.NewWarden(Warden).ToAllChat().ToAllCenter();
 
-  private async Task updateWardenDeathStats(PlayerWrapper player) {
-    var stats = API.Gangs?.Services.GetService<IPlayerStatManager>();
-    if (stats == null) return;
+        Warden.Clan = "[WARDEN]";
+        Utilities.SetStateChanged(Warden, "CCSPlayerController", "m_szClan");
+        var ev = new EventNextlevelChanged(true);
+        ev.FireEvent(false);
 
-    var stat = await stats.GetForPlayer<WardenData>(player, WardenStat.STAT_ID)
-      ?? new WardenData();
-    stat.WardenDeaths++;
+        API.Stats?.PushStat(new ServerStat("JB_WARDEN_ASSIGNED",
+          Warden.SteamID.ToString()));
 
-    await stats.SetForPlayer(player, WardenStat.STAT_ID, stat);
-  }
-
-  [GameEventHandler]
-  public HookResult OnDeath(EventPlayerDeath ev, GameEventInfo info) {
-    var player = ev.Userid;
-    if (player == null || !player.IsValid) return HookResult.Continue;
-    if (player.Team != CsTeam.CounterTerrorist) return HookResult.Continue;
-    var isWarden = ((IWardenService)this).IsWarden(player);
-    if (API.Gangs != null && !specialDays.IsSDRunning) {
-      PlayerWrapper? attackerWrapper = null;
-      if (ev.Attacker != null && ev.Attacker.IsValid && ev.Attacker != player)
-        attackerWrapper = new PlayerWrapper(ev.Attacker);
-
-      var wardenSteam = player.SteamID;
-      var toDecrement = PlayerUtil.FromTeam(CsTeam.CounterTerrorist)
-       .Where(p => p.IsReal() && !p.IsBot)
-       .Select(p => new PlayerWrapper(p))
-       .ToList();
-      var eco                = API.Gangs.Services.GetService<IEcoManager>();
-      var shouldGrantCredits = LastRequestManager.shouldGrantCredits();
-      Task.Run(async () => {
-        if (attackerWrapper != null) {
-          if (isWarden) await incrementWardenKills(attackerWrapper);
-          if (shouldGrantCredits && eco != null) {
-            var giveReason = (isWarden ? "Warden" : "Guard") + " Kill";
-            var giveAmo    = isWarden ? 35 : 15;
-            await eco.Grant(attackerWrapper, giveAmo, true, giveReason);
-          }
+        if (API.Actain != null)
+        {
+            var steam = Warden.SteamID;
+            // Server.NextFrameAsync(async () => {
+            Task.Run(async () =>
+            {
+                oldTag = await API.Actain.getTagService().GetTag(steam);
+                oldTagColor = await API.Actain.getTagService().GetTagColor(steam);
+                await Server.NextFrameAsync(() =>
+                {
+                    if (!Warden.IsValid) return;
+                    API.Actain.getTagService().SetTag(Warden, "[WARDEN]", false);
+                    API.Actain.getTagService()
+                     .SetTagColor(Warden, ChatColors.DarkBlue, false);
+                });
+            });
         }
 
-        foreach (var guard in toDecrement) {
-          // If the guard is the warden, update all guards' stats
-          // If the guard is not the warden, only update the warden's stats
-          if (guard.Steam == wardenSteam == isWarden) continue;
-          await updateGuardDeathStats(guard, isWarden);
+        if (API.Gangs != null)
+        {
+            var wrapper = new PlayerWrapper(Warden);
+            var stats = API.Gangs.Services.GetService<IPlayerStatManager>();
+            if (stats != null)
+                Task.Run(async () =>
+                {
+                    var stat =
+                      await stats.GetForPlayer<WardenData>(wrapper, WardenStat.STAT_ID)
+                      ?? new WardenData();
+
+                    stat.TimesWardened++;
+                    await stats.SetForPlayer(wrapper, WardenStat.STAT_ID, stat);
+                });
         }
-      });
-    }
 
-    if (!isWarden) return HookResult.Continue;
+        iconer?.AssignWardenIcon(Warden);
 
-    API.Stats?.PushStat(new ServerStat("JB_WARDEN_DEATH"));
+        foreach (var player in Utilities.GetPlayers())
+            player.ExecuteClientCommand($"play sounds/{CV_WARDEN_SOUND_NEW.Value}");
 
-    mute.UnPeaceMute();
-    processWardenDeath();
-    return HookResult.Continue;
-  }
+        logs.Append(logs.Player(Warden), "is now the warden.");
 
-  private async Task incrementWardenKills(PlayerWrapper attacker) {
-    var stats = API.Gangs?.Services.GetService<IPlayerStatManager>();
-    if (stats == null) return;
-    await Task.Run(async () => {
-      var stat =
-        await stats.GetForPlayer<WardenData>(attacker, WardenStat.STAT_ID)
-        ?? new WardenData();
+        unblueTimer = parent.AddTimer(3, unmarkPrisonersBlue);
+        passFreedayTimer
+        ?.Kill(); // If a warden is assigned, cancel the 10s freeday timer on pass
+        mute.PeaceMute(firstWarden ?
+          MuteReason.INITIAL_WARDEN :
+          MuteReason.WARDEN_TAKEN);
 
-      stat.WardensKilled++;
-      await stats.SetForPlayer(attacker, WardenStat.STAT_ID, stat);
-    });
-  }
+        // Always store the stats of the warden b4 they became warden, in case we need to restore them later.
+        var wardenPawn = Warden.PlayerPawn.Value;
+        if (wardenPawn == null) return false;
 
-  private async Task updateGuardDeathStats(PlayerWrapper player,
-    bool isWarden) {
-    var stats = API.Gangs?.Services.GetService<IPlayerStatManager>();
-    if (stats == null) return;
+        if (firstWarden)
+        {
+            firstWarden = false;
 
-    var stat = await stats.GetForPlayer<WardenData>(player, WardenStat.STAT_ID)
-      ?? new WardenData();
+            var hasHealthshot = playerHasHealthshot(Warden);
+            var hasHelmet = playerHasHelmetArmor(Warden);
+            preWardenStats = new PreWardenStats(wardenPawn.ArmorValue,
+              wardenPawn.Health, wardenPawn.MaxHealth, hasHealthshot, hasHelmet);
 
-    if (isWarden)
-      // The warden let a guard die
-      stat.GuardDeathsAsWarden++;
-    else
-      // The guard let the warden die
-      stat.WardenDeathsAsGuard++;
+            if (!hasHelmet) Warden.GiveNamedItem("item_assaultsuit");
 
-    await stats.SetForPlayer(player, WardenStat.STAT_ID, stat);
-  }
+            var ctArmorValue = getBalance() switch
+            {
+                0 => CV_ARMOR_EQUAL.Value,       // Balanced teams
+                1 => CV_ARMOR_OUTNUMBERED.Value, // Ts outnumber CTs
+                -1 => CV_ARMOR_OUTNUMBER.Value,   // CTs outnumber Ts
+                _ => CV_ARMOR_EQUAL.Value        // default (should never happen)
+            };
 
-  [GameEventHandler]
-  public HookResult OnChangeTeam(EventPlayerTeam @event, GameEventInfo info) {
-    var player = @event.Userid;
-    if (player == null || !player.IsValid) return HookResult.Continue;
+            /* Round start CT buff */
+            foreach (var guardController in Utilities.GetPlayers()
+             .Where(p => p is { Team: CsTeam.CounterTerrorist, PawnIsAlive: true }))
+            {
+                var guardPawn = guardController.PlayerPawn.Value;
+                if (guardPawn == null) continue;
 
-    if (API.Actain != null) {
-      var steam = player.SteamID;
-      Task.Run(async () => {
-        if ("[WARDEN]" != await API.Actain.getTagService().GetTag(steam))
-          return;
-        Server.NextFrame(() => {
-          if (!player.IsValid) return;
-          API.Actain.getTagService().SetTag(player, "", false);
-          API.Actain.getTagService()
-           .SetTagColor(player, ChatColors.Default, false);
-        });
-      });
-    }
+                guardPawn.ArmorValue = ctArmorValue < guardPawn.ArmorValue ?
+                  guardPawn.ArmorValue :
+                  ctArmorValue;
+                Utilities.SetStateChanged(guardPawn, "CCSPlayerPawn", "m_ArmorValue");
+            }
 
-    if (!((IWardenService)this).IsWarden(player)) return HookResult.Continue;
-
-    mute.UnPeaceMute();
-    processWardenDeath();
-    return HookResult.Continue;
-  }
-
-  private void processWardenDeath() {
-    if (!TryRemoveWarden())
-      logger.LogWarning("[Warden] BUG: Problem removing current warden :^(");
-
-    //	Warden died!
-    locale.WardenDied.ToAllChat().ToAllCenter();
-
-    foreach (var player in Utilities.GetPlayers()) {
-      if (!player.IsReal()) continue;
-      player.ExecuteClientCommand(
-        $"play sounds/{CV_WARDEN_SOUND_KILLED.Value}");
-    }
-
-    unblueTimer
-    ?.Kill(); // If the warden dies withing 3 seconds of becoming warden, we need to cancel the unblue timer
-    markPrisonersBlue();
-  }
-
-  private void unmarkPrisonersBlue() {
-    foreach (var player in bluePrisoners) {
-      if (!player.IsReal()) continue;
-      if (ignoreColor(player)) continue;
-      player.SetColor(Color.White);
-    }
-
-    bluePrisoners.Clear();
-  }
-
-  private void markPrisonersBlue() {
-    foreach (var player in Utilities.GetPlayers()) {
-      if (!player.IsReal() || player.Team != CsTeam.Terrorist) continue;
-      if (ignoreColor(player)) continue;
-
-      player.SetColor(Color.Blue);
-
-      bluePrisoners.Add(player);
-    }
-  }
-
-  private bool ignoreColor(CCSPlayerController player) {
-    if (specialTreatment.IsSpecialTreatment(player)) return true;
-    if (rebels.IsRebel(player)) return true;
-    return false;
-  }
-
-  private int getBalance() {
-    var ctCount = Utilities.GetPlayers()
-     .Count(p => p.Team == CsTeam.CounterTerrorist);
-    var tCount = Utilities.GetPlayers().Count(p => p.Team == CsTeam.Terrorist);
-
-    // Casting to a float ensures if we're diving by zero, we get infinity instead of an error.
-    var ratio = (float)tCount / CV_WARDEN_TERRORIST_RATIO.Value - ctCount;
-
-    return ratio switch {
-      > 0 => 1,
-      0   => 0,
-      _   => -1
-    };
-  }
-
-  private CCSPlayer_ItemServices?
-    itemServicesOrNull(CCSPlayerController player) {
-    var itemServices = player.PlayerPawn.Value?.ItemServices;
-    return itemServices != null ?
-      new CCSPlayer_ItemServices(itemServices.Handle) :
-      null;
-  }
-
-  private void setWardenStats(CCSPlayerPawn wardenPawn, int armor = -1,
-    int health = -1, int maxHealth = -1) {
-    if (armor != -1) {
-      wardenPawn.ArmorValue = armor;
-      Utilities.SetStateChanged(wardenPawn, "CCSPlayerPawn", "m_ArmorValue");
-    }
-
-    if (health != -1) {
-      wardenPawn.Health = health;
-      Utilities.SetStateChanged(wardenPawn, "CBaseEntity", "m_iHealth");
-    }
-
-    if (maxHealth != -1) {
-      wardenPawn.MaxHealth = maxHealth;
-      Utilities.SetStateChanged(wardenPawn, "CBaseEntity", "m_iMaxHealth");
-    }
-  }
-
-  private bool playerHasHelmetArmor(CCSPlayerController player) {
-    var itemServices = itemServicesOrNull(player);
-    return itemServices is { HasHelmet: true };
-  }
-
-  private bool playerHasHealthshot(CCSPlayerController player,
-    bool removeIfHas = false) {
-    var playerPawn = player.PlayerPawn.Value;
-    if (playerPawn == null || playerPawn.WeaponServices == null) return false;
-
-    foreach (var weapon in playerPawn.WeaponServices.MyWeapons) {
-      if (weapon.Value == null) continue;
-      if (weapon.Value.DesignerName.Equals("weapon_healthshot")) {
-        if (removeIfHas) weapon.Value.Remove();
+            setWardenStats(wardenPawn, CV_WARDEN_ARMOR.Value, CV_WARDEN_HEALTH.Value,
+              CV_WARDEN_MAX_HEALTH.Value);
+            if (!hasHealthshot) Warden.GiveNamedItem("weapon_healthshot");
+        }
+        else { preWardenStats = null; }
 
         return true;
-      }
     }
 
-    return false;
-  }
+    public bool TryRemoveWarden(bool isPass = false)
+    {
+        if (!HasWarden) return false;
 
-  [GameEventHandler]
-  public HookResult OnRoundEnd(EventRoundEnd ev, GameEventInfo info) {
-    TryRemoveWarden();
-    mute.UnPeaceMute();
-    openCellsTimer?.Kill();
-    return HookResult.Continue;
-  }
+        mute.UnPeaceMute();
 
-  [GameEventHandler]
-  public HookResult OnRoundStart(EventRoundStart ev, GameEventInfo info) {
-    firstWarden    = true;
-    preWardenStats = null;
+        HasWarden = false;
 
-    if (CV_WARDEN_AUTO_OPEN_CELLS.Value < 0 || RoundUtil.IsWarmup())
-      return HookResult.Continue;
-    var openCmd = provider.GetService<IWardenOpenCommand>();
-    if (openCmd == null) return HookResult.Continue;
-    var cmdLocale = provider.GetRequiredService<IWardenCmdOpenLocale>();
+        if (isPass)
+        { // If passing, start the timer to announce freeday
+            passFreedayTimer =
+              parent.AddTimer(10, () => { locale.NowFreeday.ToAllChat(); });
+        }
 
-    openCellsTimer?.Kill();
-    openCellsTimer = parent.AddTimer(CV_WARDEN_AUTO_OPEN_CELLS.Value, () => {
-      var cellZone = getCellZone();
+        if (Warden != null && Warden.Pawn.Value != null)
+        {
+            Warden.Clan = "";
+            Warden.SetColor(Color.White);
+            Utilities.SetStateChanged(Warden, "CCSPlayerController", "m_szClan");
+            var ev = new EventNextlevelChanged(true);
+            ev.FireEvent(false);
 
-      var prisoners = PlayerUtil.FromTeam(CsTeam.Terrorist)
-       .Where(p => p.Pawn.Value != null && p.PlayerPawn.Value?.AbsOrigin != null
-          && cellZone.IsInsideZone(p.PlayerPawn.Value?.AbsOrigin!))
-       .ToList();
+            if (oldTag != null)
+                API.Actain?.getTagService().SetTag(Warden, oldTag, false);
+            if (oldTagColor != null)
+                API.Actain?.getTagService()
+                 .SetTagColor(Warden, oldTagColor.Value, false);
 
-      if (openCmd.OpenedCells) {
-        if (CV_WARDEN_AUTO_SNITCH.Value && prisoners.Count != 0)
-          snitchPrisoners(prisoners, true);
-        return;
-      }
+            logs.Append(logs.Player(Warden), "is no longer the warden.");
 
-      var zoneMgr = provider.GetService<IZoneManager>();
-      // Regardless of if we actually _detect_ prisoners in cells,
-      // we should still open them (for convenience)
-      if (zoneMgr != null)
-        MapUtil.OpenCells(zoneMgr);
-      else
-        MapUtil.OpenCells();
+            if (!isPass)
+            {
+                var stats = API.Gangs?.Services.GetService<IPlayerStatManager>();
+                if (stats != null)
+                {
+                    var wrapper = new PlayerWrapper(Warden);
+                    Task.Run(async () => await updateWardenDeathStats(wrapper));
+                }
+            }
 
-      // Only if we detect prisoners in cells (i.e. presumably
-      // cells haven't been opened yet) should we send the message
+            iconer?.RemoveWardenIcon(Warden);
+        }
 
-      if (prisoners.Count == 0) return;
+        var wardenPawn = Warden!.PlayerPawn.Value;
+        if (wardenPawn == null) return false;
 
-      if (CV_WARDEN_AUTO_SNITCH.Value)
-        snitchPrisoners(prisoners, false);
-      else
-        cmdLocale.CellsOpened.ToAllChat();
-    });
+        // if isPass we restore their old health values or their current health, whichever is less.
+        if (isPass && preWardenStats != null)
+        {
+            // Regardless of if the above if statement is true or false, we want to restore the player's previous stats.
+            setWardenStats(wardenPawn,
+              Math.Min(wardenPawn.ArmorValue, preWardenStats.Value.ArmorValue),
+              Math.Min(wardenPawn.Health, preWardenStats.Value.Health),
+              Math.Min(wardenPawn.MaxHealth, preWardenStats.Value.MaxHealth));
 
-    return HookResult.Continue;
-  }
+            /* This code makes sure people can't abuse the first warden's buff by removing it if they pass. */
+            var itemServices = itemServicesOrNull(Warden);
+            if (itemServices == null) return false;
 
-  private void snitchPrisoners(List<CCSPlayerController> players, bool opened) {
-    if (API.Gangs == null) return;
+            if (!preWardenStats.Value.HadHelmetArmor) itemServices.HasHelmet = false;
 
-    var wrappers = players.Select(p => new PlayerWrapper(p)).ToList();
-    Task.Run(async () => {
-      var toReport    = wrappers.Count;
-      var gangStats   = API.Gangs.Services.GetService<IGangStatManager>();
-      var gangPlayers = API.Gangs.Services.GetService<IPlayerManager>();
-      if (gangStats == null || gangPlayers == null) {
-        baseSnitchPrisoners(wrappers.Count, opened);
-        return;
-      }
+            Utilities.SetStateChanged(wardenPawn, "CBasePlayerPawn",
+              "m_pItemServices");
 
-      Dictionary<int, int> gangMembers = new();
-      foreach (var wrapper in wrappers) {
-        var gangPlayer = await gangPlayers.GetPlayer(wrapper.Steam);
-        var gangId     = gangPlayer?.GangId;
-        if (gangId == null) continue;
+            if (!preWardenStats.Value.HeadHealthShot)
+                playerHasHealthshot(Warden, true);
+        }
 
-        var cells =
-          await gangStats.GetForGang<int>(gangId.Value, CellsPerk.STAT_ID);
-
-        gangMembers.TryGetValue(gangId.Value, out var count);
-        gangMembers[gangId.Value] = ++count;
-
-        if (count > cells) continue;
-
-        toReport--;
-      }
-
-      if (toReport == 0) return;
-      await Server.NextFrameAsync(() => baseSnitchPrisoners(toReport, opened));
-    });
-  }
-
-  private void baseSnitchPrisoners(int count, bool opened) {
-    var cmdLocale = provider.GetRequiredService<IWardenCmdOpenLocale>();
-    var msg = opened ?
-      cmdLocale.CellsOpenedSnitchPrisoners(count) :
-      cmdLocale.CellsOpenedWithPrisoners(count);
-    msg.ToAllChat();
-  }
-
-  private IZone getCellZone() {
-    var manager = provider.GetService<IZoneManager>();
-    if (manager != null) {
-      var zones = manager.GetZones(Server.MapName, ZoneType.CELL)
-       .GetAwaiter()
-       .GetResult();
-      if (zones.Count > 0) return new MultiZoneWrapper(zones);
+        Warden = null;
+        return true;
     }
 
-    var bounds = new DistanceZone(
-      Utilities
-       .FindAllEntitiesByDesignerName<SpawnPoint>("info_player_terrorist")
-       .Where(s => s.AbsOrigin != null)
-       .Select(s => s.AbsOrigin!)
-       .ToList(), DistanceZone.WIDTH_CELL);
-    return bounds;
-  }
+    private async Task updateWardenDeathStats(PlayerWrapper player)
+    {
+        var stats = API.Gangs?.Services.GetService<IPlayerStatManager>();
+        if (stats == null) return;
 
-  [GameEventHandler]
-  public HookResult OnPlayerDisconnect(EventPlayerDisconnect ev,
-    GameEventInfo info) {
-    if (!((IWardenService)this).IsWarden(ev.Userid)) return HookResult.Continue;
+        var stat = await stats.GetForPlayer<WardenData>(player, WardenStat.STAT_ID)
+          ?? new WardenData();
+        stat.WardenDeaths++;
 
-    if (!TryRemoveWarden())
-      logger.LogWarning("[Warden] BUG: Problem removing current warden :^(");
+        await stats.SetForPlayer(player, WardenStat.STAT_ID, stat);
+    }
+
+    [GameEventHandler]
+    public HookResult OnDeath(EventPlayerDeath ev, GameEventInfo info)
+    {
+        var player = ev.Userid;
+        if (player == null || !player.IsValid) return HookResult.Continue;
+        if (player.Team != CsTeam.CounterTerrorist) return HookResult.Continue;
+        var isWarden = ((IWardenService)this).IsWarden(player);
+        if (API.Gangs != null && !specialDays.IsSDRunning)
+        {
+            PlayerWrapper? attackerWrapper = null;
+            if (ev.Attacker != null && ev.Attacker.IsValid && ev.Attacker != player)
+                attackerWrapper = new PlayerWrapper(ev.Attacker);
+
+            var wardenSteam = player.SteamID;
+            var toDecrement = PlayerUtil.FromTeam(CsTeam.CounterTerrorist)
+             .Where(p => p.IsReal() && !p.IsBot)
+             .Select(p => new PlayerWrapper(p))
+             .ToList();
+            var eco = API.Gangs.Services.GetService<IEcoManager>();
+            var shouldGrantCredits = LastRequestManager.shouldGrantCredits();
+            Task.Run(async () =>
+            {
+                if (attackerWrapper != null)
+                {
+                    if (isWarden) await incrementWardenKills(attackerWrapper);
+                    if (shouldGrantCredits && eco != null)
+                    {
+                        var giveReason = (isWarden ? "Warden" : "Guard") + " Kill";
+                        var giveAmo = isWarden ? 35 : 15;
+                        await eco.Grant(attackerWrapper, giveAmo, true, giveReason);
+                    }
+                }
+
+                foreach (var guard in toDecrement)
+                {
+                    // If the guard is the warden, update all guards' stats
+                    // If the guard is not the warden, only update the warden's stats
+                    if (guard.Steam == wardenSteam == isWarden) continue;
+                    await updateGuardDeathStats(guard, isWarden);
+                }
+            });
+        }
+
+        if (!isWarden) return HookResult.Continue;
+
+        API.Stats?.PushStat(new ServerStat("JB_WARDEN_DEATH"));
+
+        mute.UnPeaceMute();
+        processWardenDeath();
+        return HookResult.Continue;
+    }
+
+    private async Task incrementWardenKills(PlayerWrapper attacker)
+    {
+        var stats = API.Gangs?.Services.GetService<IPlayerStatManager>();
+        if (stats == null) return;
+        await Task.Run(async () =>
+        {
+            var stat =
+              await stats.GetForPlayer<WardenData>(attacker, WardenStat.STAT_ID)
+              ?? new WardenData();
+
+            stat.WardensKilled++;
+            await stats.SetForPlayer(attacker, WardenStat.STAT_ID, stat);
+        });
+    }
+
+    private async Task updateGuardDeathStats(PlayerWrapper player,
+      bool isWarden)
+    {
+        var stats = API.Gangs?.Services.GetService<IPlayerStatManager>();
+        if (stats == null) return;
+
+        var stat = await stats.GetForPlayer<WardenData>(player, WardenStat.STAT_ID)
+          ?? new WardenData();
+
+        if (isWarden)
+            // The warden let a guard die
+            stat.GuardDeathsAsWarden++;
+        else
+            // The guard let the warden die
+            stat.WardenDeathsAsGuard++;
+
+        await stats.SetForPlayer(player, WardenStat.STAT_ID, stat);
+    }
+
+    [GameEventHandler]
+    public HookResult OnChangeTeam(EventPlayerTeam @event, GameEventInfo info)
+    {
+        var player = @event.Userid;
+        if (player == null || !player.IsValid) return HookResult.Continue;
+
+        if (API.Actain != null)
+        {
+            var steam = player.SteamID;
+            Task.Run(async () =>
+            {
+                if ("[WARDEN]" != await API.Actain.getTagService().GetTag(steam))
+                    return;
+                Server.NextFrame(() =>
+                {
+                    if (!player.IsValid) return;
+                    API.Actain.getTagService().SetTag(player, "", false);
+                    API.Actain.getTagService()
+                     .SetTagColor(player, ChatColors.Default, false);
+                });
+            });
+        }
+
+        if (!((IWardenService)this).IsWarden(player)) return HookResult.Continue;
+
+        mute.UnPeaceMute();
+        processWardenDeath();
+        return HookResult.Continue;
+    }
+
+    private void processWardenDeath()
+    {
+        if (!TryRemoveWarden())
+            logger.LogWarning("[Warden] BUG: Problem removing current warden :^(");
+
+        //	Warden died!
+        locale.WardenDied.ToAllChat().ToAllCenter();
+
+        foreach (var player in Utilities.GetPlayers())
+        {
+            if (!player.IsReal()) continue;
+            player.ExecuteClientCommand(
+              $"play sounds/{CV_WARDEN_SOUND_KILLED.Value}");
+        }
+
+        unblueTimer
+        ?.Kill(); // If the warden dies withing 3 seconds of becoming warden, we need to cancel the unblue timer
+        markPrisonersBlue();
+    }
+
+    private void unmarkPrisonersBlue()
+    {
+        foreach (var player in bluePrisoners)
+        {
+            if (!player.IsReal()) continue;
+            if (ignoreColor(player)) continue;
+            player.SetColor(Color.White);
+        }
+
+        bluePrisoners.Clear();
+    }
+
+    private void markPrisonersBlue()
+    {
+        foreach (var player in Utilities.GetPlayers())
+        {
+            if (!player.IsReal() || player.Team != CsTeam.Terrorist) continue;
+            if (ignoreColor(player)) continue;
+
+            player.SetColor(Color.Blue);
+
+            bluePrisoners.Add(player);
+        }
+    }
+
+    private bool ignoreColor(CCSPlayerController player)
+    {
+        if (specialTreatment.IsSpecialTreatment(player)) return true;
+        if (rebels.IsRebel(player)) return true;
+        return false;
+    }
+
+    private int getBalance()
+    {
+        var ctCount = Utilities.GetPlayers()
+         .Count(p => p.Team == CsTeam.CounterTerrorist);
+        var tCount = Utilities.GetPlayers().Count(p => p.Team == CsTeam.Terrorist);
+
+        // Casting to a float ensures if we're diving by zero, we get infinity instead of an error.
+        var ratio = (float)tCount / CV_WARDEN_TERRORIST_RATIO.Value - ctCount;
+
+        return ratio switch
+        {
+            > 0 => 1,
+            0 => 0,
+            _ => -1
+        };
+    }
+
+    private CCSPlayer_ItemServices?
+      itemServicesOrNull(CCSPlayerController player)
+    {
+        var itemServices = player.PlayerPawn.Value?.ItemServices;
+        return itemServices != null ?
+          new CCSPlayer_ItemServices(itemServices.Handle) :
+          null;
+    }
+
+    private void setWardenStats(CCSPlayerPawn wardenPawn, int armor = -1,
+      int health = -1, int maxHealth = -1)
+    {
+        if (armor != -1)
+        {
+            wardenPawn.ArmorValue = armor;
+            Utilities.SetStateChanged(wardenPawn, "CCSPlayerPawn", "m_ArmorValue");
+        }
+
+        if (health != -1)
+        {
+            wardenPawn.Health = health;
+            Utilities.SetStateChanged(wardenPawn, "CBaseEntity", "m_iHealth");
+        }
+
+        if (maxHealth != -1)
+        {
+            wardenPawn.MaxHealth = maxHealth;
+            Utilities.SetStateChanged(wardenPawn, "CBaseEntity", "m_iMaxHealth");
+        }
+    }
+
+    private bool playerHasHelmetArmor(CCSPlayerController player)
+    {
+        var itemServices = itemServicesOrNull(player);
+        return itemServices is { HasHelmet: true };
+    }
+
+    private bool playerHasHealthshot(CCSPlayerController player,
+      bool removeIfHas = false)
+    {
+        var playerPawn = player.PlayerPawn.Value;
+        if (playerPawn == null || playerPawn.WeaponServices == null) return false;
+
+        foreach (var weapon in playerPawn.WeaponServices.MyWeapons)
+        {
+            if (weapon.Value == null) continue;
+            if (weapon.Value.DesignerName.Equals("weapon_healthshot"))
+            {
+                if (removeIfHas) weapon.Value.Remove();
+
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    [GameEventHandler]
+    public HookResult OnRoundEnd(EventRoundEnd ev, GameEventInfo info)
+    {
+        TryRemoveWarden();
+        mute.UnPeaceMute();
+        openCellsTimer?.Kill();
+        return HookResult.Continue;
+    }
+
+    [GameEventHandler]
+    public HookResult OnRoundStart(EventRoundStart ev, GameEventInfo info)
+    {
+        firstWarden = true;
+        preWardenStats = null;
+
+        foreach (var player in Utilities.GetPlayers())
+        {
+            player.RemoveWeapons();
+            player.GiveNamedItem("weapon_knife");
+        }
+
+        if (CV_WARDEN_AUTO_OPEN_CELLS.Value < 0 || RoundUtil.IsWarmup())
+            return HookResult.Continue;
+        var openCmd = provider.GetService<IWardenOpenCommand>();
+        if (openCmd == null) return HookResult.Continue;
+        var cmdLocale = provider.GetRequiredService<IWardenCmdOpenLocale>();
+
+        openCellsTimer?.Kill();
+        openCellsTimer = parent.AddTimer(CV_WARDEN_AUTO_OPEN_CELLS.Value, () =>
+        {
+            var cellZone = getCellZone();
+
+            var prisoners = PlayerUtil.FromTeam(CsTeam.Terrorist)
+             .Where(p => p.Pawn.Value != null && p.PlayerPawn.Value?.AbsOrigin != null
+                && cellZone.IsInsideZone(p.PlayerPawn.Value?.AbsOrigin!))
+             .ToList();
+
+            if (openCmd.OpenedCells)
+            {
+                if (CV_WARDEN_AUTO_SNITCH.Value && prisoners.Count != 0)
+                    snitchPrisoners(prisoners, true);
+                return;
+            }
+
+            var zoneMgr = provider.GetService<IZoneManager>();
+            // Regardless of if we actually _detect_ prisoners in cells,
+            // we should still open them (for convenience)
+            if (zoneMgr != null)
+                MapUtil.OpenCells(zoneMgr);
+            else
+                MapUtil.OpenCells();
+
+            // Only if we detect prisoners in cells (i.e. presumably
+            // cells haven't been opened yet) should we send the message
+
+            if (prisoners.Count == 0) return;
+
+            if (CV_WARDEN_AUTO_SNITCH.Value)
+                snitchPrisoners(prisoners, false);
+            else
+                cmdLocale.CellsOpened.ToAllChat();
+        });
+
+        return HookResult.Continue;
+    }
+
+    private void snitchPrisoners(List<CCSPlayerController> players, bool opened)
+    {
+        if (API.Gangs == null) return;
+
+        var wrappers = players.Select(p => new PlayerWrapper(p)).ToList();
+        Task.Run(async () =>
+        {
+            var toReport = wrappers.Count;
+            var gangStats = API.Gangs.Services.GetService<IGangStatManager>();
+            var gangPlayers = API.Gangs.Services.GetService<IPlayerManager>();
+            if (gangStats == null || gangPlayers == null)
+            {
+                baseSnitchPrisoners(wrappers.Count, opened);
+                return;
+            }
+
+            Dictionary<int, int> gangMembers = new();
+            foreach (var wrapper in wrappers)
+            {
+                var gangPlayer = await gangPlayers.GetPlayer(wrapper.Steam);
+                var gangId = gangPlayer?.GangId;
+                if (gangId == null) continue;
+
+                var cells =
+                  await gangStats.GetForGang<int>(gangId.Value, CellsPerk.STAT_ID);
+
+                gangMembers.TryGetValue(gangId.Value, out var count);
+                gangMembers[gangId.Value] = ++count;
+
+                if (count > cells) continue;
+
+                toReport--;
+            }
+
+            if (toReport == 0) return;
+            await Server.NextFrameAsync(() => baseSnitchPrisoners(toReport, opened));
+        });
+    }
+
+    private void baseSnitchPrisoners(int count, bool opened)
+    {
+        var cmdLocale = provider.GetRequiredService<IWardenCmdOpenLocale>();
+        var msg = opened ?
+          cmdLocale.CellsOpenedSnitchPrisoners(count) :
+          cmdLocale.CellsOpenedWithPrisoners(count);
+        msg.ToAllChat();
+    }
+
+    private IZone getCellZone()
+    {
+        var manager = provider.GetService<IZoneManager>();
+        if (manager != null)
+        {
+            var zones = manager.GetZones(Server.MapName, ZoneType.CELL)
+             .GetAwaiter()
+             .GetResult();
+            if (zones.Count > 0) return new MultiZoneWrapper(zones);
+        }
+
+        var bounds = new DistanceZone(
+          Utilities
+           .FindAllEntitiesByDesignerName<SpawnPoint>("info_player_terrorist")
+           .Where(s => s.AbsOrigin != null)
+           .Select(s => s.AbsOrigin!)
+           .ToList(), DistanceZone.WIDTH_CELL);
+        return bounds;
+    }
+
+    [GameEventHandler]
+    public HookResult OnPlayerDisconnect(EventPlayerDisconnect ev,
+      GameEventInfo info)
+    {
+        if (!((IWardenService)this).IsWarden(ev.Userid)) return HookResult.Continue;
+
+        if (!TryRemoveWarden())
+            logger.LogWarning("[Warden] BUG: Problem removing current warden :^(");
 
 
-    locale.WardenLeft.ToAllChat().ToAllCenter();
+        locale.WardenLeft.ToAllChat().ToAllCenter();
 
-    foreach (var player in Utilities.GetPlayers())
-      player.ExecuteClientCommand(
-        $"play sounds/{CV_WARDEN_SOUND_PASSED.Value}");
+        foreach (var player in Utilities.GetPlayers())
+            player.ExecuteClientCommand(
+              $"play sounds/{CV_WARDEN_SOUND_PASSED.Value}");
 
-    locale.BecomeNextWarden.ToAllChat();
-    return HookResult.Continue;
-  }
+        locale.BecomeNextWarden.ToAllChat();
+        return HookResult.Continue;
+    }
 }

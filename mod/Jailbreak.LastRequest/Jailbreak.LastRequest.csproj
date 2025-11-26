@@ -7,11 +7,17 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\..\public\Jailbreak.Formatting\Jailbreak.Formatting.csproj"/>
-        <ProjectReference Include="..\..\public\Jailbreak.Public\Jailbreak.Public.csproj"/>
-        <ProjectReference Include="..\..\public\Jailbreak.Validator\Jailbreak.Validator.csproj"/>
-        <ProjectReference Include="..\Gangs.BaseImpl\Gangs.BaseImpl.csproj"/>
-        <ProjectReference Include="..\Gangs.LastRequestColorPerk\Gangs.LastRequestColorPerk.csproj"/>
+      <PackageReference Include="CounterStrikeSharp.API" Version="1.0.347" />
+      <PackageReference Include="CS2ScreenMenuAPI" Version="1.6.0" />
+      <PackageReference Include="CS2TraceRay" Version="1.0.8" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\public\Jailbreak.Formatting\Jailbreak.Formatting.csproj" />
+        <ProjectReference Include="..\..\public\Jailbreak.Public\Jailbreak.Public.csproj" />
+        <ProjectReference Include="..\..\public\Jailbreak.Validator\Jailbreak.Validator.csproj" />
+        <ProjectReference Include="..\Gangs.BaseImpl\Gangs.BaseImpl.csproj" />
+        <ProjectReference Include="..\Gangs.LastRequestColorPerk\Gangs.LastRequestColorPerk.csproj" />
     </ItemGroup>
 
     <ItemGroup>

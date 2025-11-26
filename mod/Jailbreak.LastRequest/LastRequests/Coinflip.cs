@@ -81,6 +81,7 @@ public class Coinflip : AbstractLastRequest {
 
   public override void OnEnd(LRResult result) {
     State = LRState.COMPLETED;
+
     if (result == LRResult.PRISONER_WIN)
       Guard.Pawn.Value?.CommitSuicide(false, true);
     else

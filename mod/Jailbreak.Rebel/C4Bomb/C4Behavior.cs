@@ -34,7 +34,7 @@ public class C4Behavior(IC4Locale ic4Locale, IRebelService rebelService,
     ConVarFlags.FCVAR_NONE, new RangeValidator<float>(0, 2));
 
   public static readonly FakeConVar<float> CV_C4_RADIUS =
-    new("css_jb_c4_radius", "Bomb explosion radius", 350,
+    new("css_jb_c4_radius", "Bomb explosion radius", 270,
       ConVarFlags.FCVAR_NONE, new RangeValidator<float>(0, 10000));
 
   public static readonly FakeConVar<float> CV_C4_BASE_DAMAGE =

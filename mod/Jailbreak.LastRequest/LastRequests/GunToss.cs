@@ -72,7 +72,7 @@ public class GunToss(BasePlugin plugin, ILastRequestManager manager,
     Guard.GiveNamedItem("weapon_knife");
     Prisoner.GiveNamedItem("weapon_deagle");
     Guard.GiveNamedItem("weapon_deagle");
-    Prisoner.GetWeaponBase("weapon_deagle").SetAmmo(0, 7);
+    //Prisoner.GetWeaponBase("weapon_deagle").SetAmmo(0, 0);
 
     Server.RunOnTick(Server.TickCount + 16, () => State = LRState.ACTIVE);
   }
